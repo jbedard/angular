@@ -7,7 +7,9 @@
  */
 
 import {AsyncTestCompleter, beforeEach, describe, expect, inject, it} from '@angular/core/testing/src/testing_internal';
+import {filter} from 'rxjs/operators';
 import {EventEmitter} from '../src/event_emitter';
+import {Subject} from 'rxjs/Subject';
 
 {
   describe('EventEmitter', () => {
@@ -118,12 +120,154 @@ import {EventEmitter} from '../src/event_emitter';
 
        }));
 
+    it('delivers complete asynchronously when forced to async mode',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const e = new EventEmitter(true);
+        const log: any[] /** TODO #9100 */ = [];
+        e.subscribe((x: any) => {
+          log.push(x);
+        }, undefined, () => {
+          log.push(4);
+          expect(log).toEqual([1, 3, 5, 2, 4]);
+          async.done();
+        });
+        log.push(1);
+        e.emit(2);
+        log.push(3);
+        e.complete();
+        log.push(5);
+
+      }));
+
+    it('delivers errors asynchronously when forced to async mode',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const e = new EventEmitter(true);
+        const log: any[] /** TODO #9100 */ = [];
+        e.subscribe((x: any) => {
+          log.push(x);
+        }, (e: any) => {
+          log.push(e);
+          expect(log).toEqual([1, 3, 5, 2, 4]);
+          async.done();
+        });
+        log.push(1);
+        e.emit(2);
+        log.push(3);
+        e.error(4);
+        log.push(5);
+
+      }));
+
     it('reports whether it has subscribers', () => {
       const e = new EventEmitter(false);
       expect(e.observers.length > 0).toBe(false);
       e.subscribe({next: () => {}});
       expect(e.observers.length > 0).toBe(true);
     });
+
+    it('should invoke Subscription dispose method after .subscribe().unsubscribe()', () => {
+      const ee = new EventEmitter();
+      const sub = ee.subscribe();
+      const dispose = jasmine.createSpy("dispose");
+      sub.add(dispose);
+      sub.unsubscribe();
+      expect(dispose).toHaveBeenCalled();
+    });
+
+    it('should invoke Subscription dispose method after .subscribe().pipe(op).unsubscribe()', () => {
+      const ee = new EventEmitter();
+      const sub = ee.pipe(filter(() => true)).subscribe();
+      const dispose = jasmine.createSpy("dispose");
+      sub.add(dispose);
+      sub.unsubscribe();
+      expect(dispose).toHaveBeenCalled();
+    });
+
+    it('should have no observers after .subscribe().unsubscribe()', () => {
+      const ee = new EventEmitter();
+      ee.subscribe().unsubscribe();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .subscribe(Subject).unsubscribe()', () => {
+      const ee = new EventEmitter();
+      ee.subscribe(new Subject()).unsubscribe();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .pipe().subscribe().unsubscribe()', () => {
+      const ee = new EventEmitter();
+      ee.pipe().subscribe().unsubscribe();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .pipe(op).subscribe().unsubscribe()', () => {
+      const ee = new EventEmitter();
+      ee.pipe(filter(() => true)).subscribe().unsubscribe();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .subscribe() + .complete()', () => {
+      const ee = new EventEmitter();
+      ee.subscribe();
+      ee.complete();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .subscribe(Subject) + .complete()', () => {
+      const ee = new EventEmitter();
+      ee.subscribe(new Subject());
+      ee.complete();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .pipe().subscribe() + .error()', () => {
+      const ee = new EventEmitter();
+      ee.pipe().subscribe();
+      ee.complete();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .pipe(op).subscribe() + .error()', () => {
+      const ee = new EventEmitter();
+      ee.pipe(filter(() => true)).subscribe();
+      ee.complete();
+      expect(ee.observers.length).toBe(0);
+    });
+
+    it('should have no observers after .subscribe() + .error()',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const ee = new EventEmitter();
+        ee.subscribe(undefined, () => async.done());
+        ee.error("err");
+        expect(ee.observers.length).toBe(0);
+      }));
+
+    it('should have no observers after .subscribe(Subject) + .error()',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const ee = new EventEmitter();
+        const s = new Subject();
+        s.subscribe(undefined, () => async.done());
+        ee.subscribe(s);
+        ee.error("err");
+        expect(ee.observers.length).toBe(0);
+      }));
+
+    it('should have no observers after .pipe().subscribe() + .error()',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const ee = new EventEmitter();
+        ee.pipe().subscribe(undefined, () => async.done());
+        ee.error("err");
+        expect(ee.observers.length).toBe(0);
+      }));
+
+    it('should have no observers after .pipe(op).subscribe() + .error()',
+      inject([AsyncTestCompleter], (async: AsyncTestCompleter) => {
+        const ee = new EventEmitter();
+        ee.pipe(filter(() => true)).subscribe(undefined, () => async.done());
+        ee.error("err");
+        expect(ee.observers.length).toBe(0);
+      }));
 
     // TODO: vsavkin: add tests cases
     // should call dispose on the subscription if generator returns {done:true}
