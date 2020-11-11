@@ -135,7 +135,41 @@ export function createNgCompilerOptions(
   const {enableIvy} = angularCompilerOptions;
   angularCompilerOptions.enableIvy = enableIvy !== false && enableIvy !== 'tsc';
 
-  return {...tsOptions, ...angularCompilerOptions, genDir: basePath, basePath};
+  return convertToOptionsWithAbsolutePaths({...tsOptions, ...angularCompilerOptions, genDir: basePath, basePath});
+}
+
+// api.CompilerOptions which reference path(s) to be normalized
+// https://github.com/microsoft/TypeScript/blob/v4.0.5/src/compiler/commandLineParser.ts#L125-L1013
+const FILE_OPTIONS: ReadonlyArray<keyof api.CompilerOptions> = [
+  // // NgCompilerOptions
+  // "genDir",
+  // "basePath",
+
+  // // ts.CompilerOptions
+  // "baseUrl",
+  // "project",
+  // "outFile",
+  // "outDir",
+  // "rootDir",
+  // "rootDirs",
+  // "tsBuildInfoFile",
+];
+
+// Similar to the TypeScript convertToOptionsWithAbsolutePaths for nomralizing config paths
+// https://github.com/microsoft/TypeScript/blob/v4.0.5/src/compiler/commandLineParser.ts#L2189-L2206
+export function convertToOptionsWithAbsolutePaths(options: api.CompilerOptions): api.CompilerOptions {
+  const fs = getFileSystem();
+
+  return {
+    ...options,
+    ...FILE_OPTIONS.reduce((absolutedPaths: api.CompilerOptions, option) => {
+      const value = options[option];
+      if (typeof value === "string") {
+        absolutedPaths[option] = fs.resolve(value);
+      }
+      return absolutedPaths;
+    }, {})
+  };
 }
 
 export function readConfiguration(
